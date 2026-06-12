@@ -1,0 +1,21 @@
+# colcon build output — generated locally, never committed
+build/
+install/
+log/
+bags/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db

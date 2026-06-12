@@ -1,0 +1,34 @@
+/**:
+  ros__parameters:
+    camera_node:
+      camera_device: "/dev/video0" # WSL USB camera attached via usbipd busid 1-3
+      camera_device_id: 0          # Fallback index if camera_device is empty
+      frame_width: 640             # Camera frame width in pixels
+      frame_height: 480            # Camera frame height in pixels
+      frame_rate: 30               # Camera frame rate in FPS
+
+    detector_node:
+      aruco_dictionary_id: 0       # Aruco dictionary ID (0=DICT_4X4_50, 1=DICT_5X5_100, etc.)
+      marker_size: 0.05            # Aruco marker size in meters (5cm)
+      min_marker_perimeter_rate: 0.80  # Minimum marker perimeter rate for detection
+
+    manipulator_node:
+      serial_port: "/dev/ttyUSB0"  # Serial port for Arduino connection
+      command_delay_ms: 1000       # Delay between commands in milliseconds (3 seconds)
+      
+      # Pick command sequence
+      pick_commands:
+        - "home"                   # Move to home position
+        - "gripper-100"         # Move to detected object
+        - "base_y-100"          # Close gripper to pick object
+      
+      # Place command sequence
+      place_commands:
+        - "base_x-130"          # Move to place location
+        - "base_y-95"           # Release object
+        - "base_y-90"           
+        - "gripper-180"
+        - "base_y-140"
+        - "base_x-40"
+        - "base_y-110;shoulder-180"
+        - "home"
