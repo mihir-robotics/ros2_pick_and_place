@@ -1,4 +1,4 @@
-# ROS2 Pick & Place Robot Arm using Computer Vision [![CI](https://github.com/mihir-robotics/ros2_webots/actions/workflows/ci.yml/badge.svg)](https://github.com/mihir-robotics/ros2_webots/actions/workflows/ci.yml)
+# ROS2 Pick & Place Robot Arm using Computer Vision [![CI](https://github.com/mihir-robotics/ros2_pick_and_place/actions/workflows/ci.yml/badge.svg)](https://github.com/mihir-robotics/ros2_pick_and_place/actions/workflows/ci.yml)
 
 ROS 2 package that runs pick-and-place on an Arduino robot arm. A USB camera feeds frames to an ArUco detector; when a marker is seen, the manipulator node sends a configured servo command sequence over serial port.
 
