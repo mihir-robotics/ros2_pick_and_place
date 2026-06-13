@@ -1,23 +1,3 @@
-/*
- * =====================================================
- *  Servo Controller — Arduino NANO
- *  Pins : 3(base) | 5(shoulder) | 7(elbow) | 9(wrist) | 11(gripper)
- *  Home : all servos at 90°
- *
- *  Serial commands (9600 baud, newline-terminated):
- *    base-<angle>      e.g.  base-90
- *    shoulder-<angle>  e.g.  shoulder-45
- *    elbow-<angle>     e.g.  elbow-120
- *    wrist-<angle>     e.g.  wrist-100
- *    gripper-<angle>   e.g.  gripper-0
- *    home              → resets all servos to 90°
- *    status            → prints current angles
- *
- *  Multiple commands can be chained with semicolons:
- *    e.g.  base-90;elbow-45;wrist-120
- * =====================================================
- */
-
 #include <Servo.h>
 
 // ── Servo objects ──────────────────────────────────
@@ -30,45 +10,38 @@ Servo gripper;
 
 // ── Pin assignments ────────────────────────────────
 const int PIN_BASE_X   = 3;
-const int PIN_BASE_Y   = 11;
+const int PIN_BASE_Y   = 10;
 const int PIN_SHOULDER = 5;
 const int PIN_ELBOW    = 6;
 const int PIN_WRIST    = 7;
 const int PIN_GRIPPER  = 8;
 
 // ── Current angle tracking ─────────────────────────
-int angleBaseX     = 90;
+int angleBaseX     = 40;
 int angleBaseY     = 90;
-int angleShoulder = 90;
-int angleElbow    = 90;
-int angleWrist    = 90;
-int angleGripper  = 90;
+int angleShoulder = 160;
+int angleElbow    = 50;
+int angleWrist    = 0;
+int angleGripper  = 180;
 
 // ── Helpers ────────────────────────────────────────
 void goHome() {
-  base_x.write(40);     
-  angleBaseX = 40;
-  base_y.write(90);     
-  angleBaseY = 90;
-  shoulder.write(160); 
-  angleShoulder = 160;
-  elbow.write(50);    
-  angleElbow    = 45;
-  wrist.write(0);    
-  angleWrist    = 0;  
-  gripper.write(180);
-  angleGripper  = 180;
+  base_x.write(angleBaseX);     
+  base_y.write(angleBaseY);
+  shoulder.write(angleShoulder); 
+  elbow.write(angleElbow);    
+  wrist.write(angleWrist);    
+  gripper.write(angleGripper);
 }
 
 void printStatus() {
-  Serial.println("── Current angles ──────────────");
-  Serial.print("  base X    : "); Serial.println(angleBaseX);
-  Serial.print("  base Y     : "); Serial.println(angleBaseY);
-  Serial.print("  shoulder : "); Serial.println(angleShoulder);
-  Serial.print("  elbow    : "); Serial.println(angleElbow);
-  Serial.print("  wrist    : "); Serial.println(angleWrist);
-  Serial.print("  gripper  : "); Serial.println(angleGripper);
-  Serial.println("────────────────────────────────");
+  Serial.print("JOINTS ");
+  Serial.print(angleBaseX);     Serial.print(",");
+  Serial.print(angleBaseY);     Serial.print(",");
+  Serial.print(angleShoulder);  Serial.print(",");
+  Serial.print(angleElbow);     Serial.print(",");
+  Serial.print(angleWrist);     Serial.print(",");
+  Serial.println(angleGripper);
 }
 
 // Clamp angle to safe servo range 0–180
@@ -85,6 +58,7 @@ void handleCommand(String cmd) {
 
   if (cmd == "home") {
     goHome();
+    printStatus();
     return;
   }
 
@@ -125,15 +99,11 @@ void handleCommand(String cmd) {
   } else {
     Serial.print("ERR: unknown servo '");
     Serial.print(name);
-    Serial.println("'. Valid: base, shoulder, elbow, wrist, gripper");
+    Serial.println("'. Valid: base_x, base_y, shoulder, elbow, wrist, gripper");
     return;
   }
 
-  Serial.print("OK: ");
-  Serial.print(name);
-  Serial.print(" → ");
-  Serial.print(angle);
-  Serial.println("°");
+  printStatus();
 }
 
 // ── Split on ';' and dispatch each command in order ──
