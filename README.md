@@ -1,6 +1,6 @@
 # ROS2 Pick & Place Robot Arm using Computer Vision [![CI](https://github.com/mihir-robotics/ros2_pick_and_place/actions/workflows/ci.yml/badge.svg)](https://github.com/mihir-robotics/ros2_pick_and_place/actions/workflows/ci.yml)
 
-ROS 2 package that runs pick-and-place on an Arduino robot arm. A USB camera feeds frames to an ArUco detector; when a marker is seen, the manipulator node sends a configured servo command sequence over serial port.
+ROS 2 package that runs pick-and-place on an Arduino robot arm. A USB camera feeds frames to an ArUco detector; when a marker is seen, the manipulator node runs a two-stage pick-and-place cycle over serial at 9600 baud. The Arduino firmware supports smooth trajectory motion via `pose-*` and duration-based joint commands.
 
 
 ![arm 2x gif](assets/arm.gif)
@@ -15,7 +15,12 @@ ROS 2 package that runs pick-and-place on an Arduino robot arm. A USB camera fee
 
 1. **camera_node** — captures frames from a V4L2 USB camera and publishes `sensor_msgs/Image` on `/camera/image`.
 2. **detector_node** — detects ArUco markers in the camera stream and publishes the marker ID as `std_msgs/Int32` on `/detector/aruco_id`.
-3. **manipulator_node** — on each new marker ID, runs the configured pick and place command lists over serial at 9600 baud. Concurrent cycles are rejected while the arm is busy.
+3. **manipulator_node** — on startup, moves to the pre-pick pose (first entry in `pick_commands`). When an ArUco marker is detected, a worker thread runs a two-stage cycle:
+   - **Stage 1:** `pick_commands` → `place_commands_1` → return to pre-pick pose
+   - **Wait:** blocks until the next ArUco sighting
+   - **Stage 2:** `pick_commands` → `place_commands_2`
+   
+   Concurrent detections are rejected while a cycle is in progress (`is_busy_`). During the wait-for-place2 phase, a new marker sighting unblocks stage 2. The marker ID is logged but does not change which command lists run.
 
 If the serial port cannot be opened, the manipulator node logs commands in simulation mode instead of sending them.
 
@@ -70,31 +75,40 @@ detector_node:
 
 manipulator_node:
   serial_port: "/dev/ttyUSB0"
-  command_delay_ms: 1000
+  command_delay_ms: 750        # Pause after each command so the arm settles
   pick_commands:
-    - "home"
+    - "pose-40,50,0,0,180;300" # Pre-pick pose (also used on startup and between stages)
+    - "wrist-45-500"
     - "gripper-100"
-    - "base_y-100"
-  place_commands:
-    - "base_x-130"
-    - "base_y-95"
-    - "base_y-90"
+  place_commands_1:
+    - "pose-135,55,0,55,100;300"
     - "gripper-180"
-    - "base_y-140"
-    - "base_x-40"
-    - "base_y-110;shoulder-180"
-    - "home"
+    - "wrist-0-500"
+    - "home-500"
+  place_commands_2:
+    - "pose-110,45,10,60,100;300"
+    - "gripper-180"
+    - "wrist-0-500"
+    - "home-500"
 ```
 
 ## Serial protocol
 
-Commands are newline-terminated strings sent at 9600 baud. The Arduino sketch in `src/pick_n_place_bot/arduino/arduino.ino` accepts:
+Commands are newline-terminated strings sent at 9600 baud. The Arduino sketch in `src/pick_n_place_bot/arduino/arduino.ino` drives five servos (`base_x`, `base_y`, `shoulder`, `wrist`, `gripper`) on pins 3, 5, 7, 9, and 10.
 
-- `home` — move all servos to configured home angles
-- `<joint>-<angle>` — e.g. `base_x-90`, `shoulder-180`, `gripper-100`
-- Multiple commands in one line, separated by `;` — e.g. `base_y-110;shoulder-180`
+| Command | Example | Behavior |
+|---|---|---|
+| Instant home | `home` | All joints to home angles `[90, 90, 90, 90, 180]` |
+| Trajectory home | `home-500` | Smooth return over 500 ms |
+| Instant joint | `gripper-100` | Single joint move |
+| Trajectory joint | `wrist-45-500` | Single joint over 500 ms |
+| Synchronized pose | `pose-40,50,0,0,180;300` | All 5 joints move together over 300 ms |
+| Status | `status` | Responds `JOINTS 90,90,90,90,180` |
+| Chaining | `gripper-100;wrist-0-500` | Queued sequentially (`pose-*` is atomic) |
 
-Pick and place sequences are defined entirely in `params.yaml`.
+The Arduino prints `DONE` when each command or trajectory finishes. The ROS manipulator node uses a fixed `command_delay_ms` sleep after each command and does not wait for `DONE` — tune the delay to match your trajectory durations.
+
+Pick and place sequences are defined in `params.yaml` via `pick_commands`, `place_commands_1`, and `place_commands_2`.
 
 ## USB camera on WSL2
 
