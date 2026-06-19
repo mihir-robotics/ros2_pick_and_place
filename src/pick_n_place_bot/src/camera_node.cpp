@@ -1,9 +1,28 @@
+// Copyright 2026 goober
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include "pick_n_place_bot/camera_node.hpp"
+
+#include <algorithm>
+#include <chrono>
+
 #include "cv_bridge/cv_bridge.hpp"
 
 CameraNode::CameraNode()
-    : Node("camera_node") {
-  this->declare_parameter<std::string>( "camera_device", "/dev/video0");
+: Node("camera_node")
+{
+  this->declare_parameter<std::string>("camera_device", "/dev/video0");
   this->declare_parameter<int>("camera_device_id", 0);
   this->declare_parameter<int>("frame_width", 640);
   this->declare_parameter<int>("frame_height", 480);
@@ -16,7 +35,7 @@ CameraNode::CameraNode()
   frame_rate_ = this->get_parameter("frame_rate").as_int();
 
   image_pub_ = this->create_publisher<sensor_msgs::msg::Image>(
-      "camera/image", rclcpp::SensorDataQoS().best_effort());
+    "camera/image", rclcpp::SensorDataQoS().best_effort());
 
   if (!camera_device_.empty()) {
     camera_.open(camera_device_, cv::CAP_V4L2);
@@ -26,8 +45,8 @@ CameraNode::CameraNode()
 
   if (!camera_.isOpened()) {
     RCLCPP_ERROR(this->get_logger(),
-                 "Failed to open camera (device=%s, id=%d)",
-                 camera_device_.c_str(), camera_device_id_);
+      "Failed to open camera (device=%s, id=%d)",
+      camera_device_.c_str(), camera_device_id_);
     throw std::runtime_error("Camera open failed");
   }
 
@@ -37,28 +56,30 @@ CameraNode::CameraNode()
 
   if (camera_device_.empty()) {
     RCLCPP_INFO(this->get_logger(), "Camera opened: /dev/video%d (%dx%d @ %d fps)",
-                camera_device_id_, frame_width_, frame_height_, frame_rate_);
+      camera_device_id_, frame_width_, frame_height_, frame_rate_);
   } else {
     RCLCPP_INFO(this->get_logger(), "Camera opened: %s (%dx%d @ %d fps)",
-                camera_device_.c_str(), frame_width_, frame_height_, frame_rate_);
+      camera_device_.c_str(), frame_width_, frame_height_, frame_rate_);
   }
 
   const int timer_period_ms = std::max(1, 1000 / frame_rate_);
   timer_ = this->create_wall_timer(
-      std::chrono::milliseconds(timer_period_ms),
-      std::bind(&CameraNode::timer_callback, this));
+    std::chrono::milliseconds(timer_period_ms),
+    std::bind(&CameraNode::timer_callback, this));
 
   RCLCPP_INFO(this->get_logger(),
-              "Camera node started, publishing to /camera/image");
+    "Camera node started, publishing to /camera/image");
 }
 
-CameraNode::~CameraNode() {
+CameraNode::~CameraNode()
+{
   if (camera_.isOpened()) {
     camera_.release();
   }
 }
 
-bool CameraNode::configure_camera() {
+bool CameraNode::configure_camera()
+{
   // MJPEG reduces USB bandwidth; set before resolution on most webcams
   camera_.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
   camera_.set(cv::CAP_PROP_BUFFERSIZE, 1);
@@ -74,7 +95,7 @@ bool CameraNode::configure_camera() {
   cv::Mat test_frame;
   if (!camera_.grab() || !camera_.retrieve(test_frame) || test_frame.empty()) {
     RCLCPP_WARN(this->get_logger(),
-                "Camera opened but failed to read an initial frame");
+      "Camera opened but failed to read an initial frame");
     return false;
   }
 
@@ -82,7 +103,8 @@ bool CameraNode::configure_camera() {
   return true;
 }
 
-void CameraNode::reopen_camera() {
+void CameraNode::reopen_camera()
+{
   RCLCPP_WARN(this->get_logger(), "Reopening camera after read failures");
   camera_.release();
 
@@ -101,7 +123,8 @@ void CameraNode::reopen_camera() {
   RCLCPP_INFO(this->get_logger(), "Camera reopened successfully");
 }
 
-void CameraNode::timer_callback() {
+void CameraNode::timer_callback()
+{
   if (!camera_.grab()) {
     ++consecutive_failures_;
     RCLCPP_WARN(this->get_logger(), "Failed to read frame from camera");
@@ -124,14 +147,15 @@ void CameraNode::timer_callback() {
   consecutive_failures_ = 0;
 
   auto msg = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", frame)
-                 .toImageMsg();
+    .toImageMsg();
   msg->header.stamp = this->now();
   msg->header.frame_id = "camera";
 
   image_pub_->publish(*msg);
 }
 
-int main(int argc, char * argv[]) {
+int main(int argc, char * argv[])
+{
   rclcpp::init(argc, argv);
   rclcpp::spin(std::make_shared<CameraNode>());
   rclcpp::shutdown();
