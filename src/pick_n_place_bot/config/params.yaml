@@ -14,21 +14,23 @@
 
     manipulator_node:
       serial_port: "/dev/ttyUSB0"  # Serial port for Arduino connection
-      command_delay_ms: 1000       # Delay between commands in milliseconds (3 seconds)
-      
+      command_delay_ms: 750        # Pause after each command so the arm settles
+
       # Pick command sequence
       pick_commands:
-        - "home"                   # Move to home position
-        - "gripper-100"         # Move to detected object
-        - "base_y-100"          # Close gripper to pick object
-      
+        - "pose-40,50,0,0,180;300" # Pre-pick pose
+        - "wrist-45-500"
+        - "gripper-100"
+
       # Place command sequence
-      place_commands:
-        - "base_x-130"          # Move to place location
-        - "base_y-95"           # Release object
-        - "base_y-90"           
+      place_commands_1:
+        - "pose-135,55,0,55,100;300"   # Synchronized move to place location
         - "gripper-180"
-        - "base_y-140"
-        - "base_x-40"
-        - "base_y-110;shoulder-180"
-        - "home"
+        - "wrist-0-500"
+        - "home-500"
+
+      place_commands_2:
+        - "pose-110,45,10,60,100;300"   # Synchronized move to place location
+        - "gripper-180"
+        - "wrist-0-500"
+        - "home-500"

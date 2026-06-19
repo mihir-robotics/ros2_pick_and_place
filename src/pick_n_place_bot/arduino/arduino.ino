@@ -4,7 +4,6 @@
 Servo base_x;
 Servo base_y;
 Servo shoulder;
-Servo elbow;
 Servo wrist;
 Servo gripper;
 
@@ -49,7 +48,7 @@ String cmdQueue[MAX_QUEUE];
 int queueLen = 0;
 bool commandBusy = false;
 
-void dispatchCommand(const String &cmdRaw);
+void dispatchCommand(const String &cmdRaw); // ASK: why is this function declared here?
 
 // ── Helpers ────────────────────────────────────────
 int clamp(int angle) {
