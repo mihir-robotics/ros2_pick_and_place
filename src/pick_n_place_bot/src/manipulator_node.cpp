@@ -8,26 +8,29 @@
 ManipulatorNode::ManipulatorNode()
     : Node("manipulator_node"),
       is_busy_(false),
+      waiting_for_place2_aruco_(false),
+      place2_aruco_seen_(false),
       shutdown_requested_(false) {
-  // Declare parameters
   this->declare_parameter<std::string>("serial_port", "/dev/ttyUSB0");
-  this->declare_parameter<int>("command_delay_ms", 1000);
+  this->declare_parameter<int>("command_delay_ms", 750);
   this->declare_parameter<std::vector<std::string>>(
       "pick_commands",
-      std::vector<std::string>{"home", "gripper-100", "base_y-100"});
+      std::vector<std::string>{"pose-40,50,0,0,180;300", "wrist-45-500", "gripper-100"});
   this->declare_parameter<std::vector<std::string>>(
-      "place_commands",
-      std::vector<std::string>{"base_x-130", "base_y-95", "base_y-90",
-                                 "gripper-180", "base_y-140","base_x-40",
-                                 "base_y-110,shoulder-180","home"});
+      "place_commands_1",
+      std::vector<std::string>{"pose-135,55,0,55,100;300", "gripper-180",
+                               "wrist-0-500", "home-500"});
+  this->declare_parameter<std::vector<std::string>>(
+      "place_commands_2",
+      std::vector<std::string>{"pose-110,45,10,60,100;300", "gripper-180",
+                               "wrist-0-500", "home-500"});
 
-  // Get parameters
   serial_port_name_ = this->get_parameter("serial_port").as_string();
   command_delay_ms_ = this->get_parameter("command_delay_ms").as_int();
   pick_commands_ = this->get_parameter("pick_commands").as_string_array();
-  place_commands_ = this->get_parameter("place_commands").as_string_array();
+  place_commands_1_ = this->get_parameter("place_commands_1").as_string_array();
+  place_commands_2_ = this->get_parameter("place_commands_2").as_string_array();
 
-  // Initialize serial port
   serial_fd_ = ::open(serial_port_name_.c_str(), O_RDWR | O_NOCTTY);
   if (serial_fd_ < 0) {
     RCLCPP_WARN(this->get_logger(),
@@ -43,14 +46,17 @@ ManipulatorNode::ManipulatorNode()
                 serial_port_name_.c_str());
   }
 
-  // Subscribe to ArUco IDs published by detector_node (std_msgs/Int32)
   aruco_sub_ =
       this->create_subscription<std_msgs::msg::Int32>(
           "detector/aruco_id", rclcpp::SensorDataQoS().best_effort(),
           std::bind(&ManipulatorNode::aruco_callback, this,
                     std::placeholders::_1));
 
-  // Run pick-and-place on a dedicated thread so callbacks return immediately
+  if (!pick_commands_.empty()) {
+    RCLCPP_INFO(this->get_logger(), "Moving to pre-pick pose on startup");
+    send_command(pick_commands_.front());
+  }
+
   worker_ = std::thread(std::bind(&ManipulatorNode::worker_thread, this));
 
   RCLCPP_INFO(this->get_logger(), "Manipulator node started");
@@ -58,7 +64,6 @@ ManipulatorNode::ManipulatorNode()
 }
 
 ManipulatorNode::~ManipulatorNode() {
-  // Signal worker to exit and wait for any in-flight cycle to finish
   {
     std::lock_guard<std::mutex> lock(state_mutex_);
     shutdown_requested_ = true;
@@ -80,40 +85,25 @@ void ManipulatorNode::aruco_callback(
   {
     std::lock_guard<std::mutex> lock(state_mutex_);
 
-    // Reject overlapping requests; is_busy_ is cleared by the worker after each cycle
-    if (is_busy_) {
+    if (waiting_for_place2_aruco_) {
+      place2_aruco_seen_ = true;
+      RCLCPP_INFO(this->get_logger(),
+                  "Aruco marker %d detected — running pick and place_commands_2",
+                  aruco_id);
+    } else if (is_busy_) {
       RCLCPP_WARN(this->get_logger(),
                   "Aruco marker %d detected but manipulator is busy", aruco_id);
       return;
+    } else {
+      is_busy_ = true;
+      pending_aruco_id_ = aruco_id;
+      RCLCPP_INFO(this->get_logger(),
+                  "Aruco marker %d detected — starting pick and place_commands_1",
+                  aruco_id);
     }
-
-    is_busy_ = true;
-    pending_aruco_id_ = aruco_id;
   }
 
-  // Wake worker without holding the mutex (avoids deadlock with pick_n_place)
   work_cv_.notify_one();
-}
-
-void ManipulatorNode::pick_n_place(int aruco_id) {
-  RCLCPP_INFO(this->get_logger(),
-              "Starting pick and place for Aruco marker: %d", aruco_id);
-
-  // Execute pick commands
-  RCLCPP_INFO(this->get_logger(), "Executing pick commands");
-  for (const auto& cmd : pick_commands_) {
-    send_command(cmd);
-    std::this_thread::sleep_for(std::chrono::milliseconds(command_delay_ms_));
-  }
-
-  // Execute place commands
-  RCLCPP_INFO(this->get_logger(), "Executing place commands");
-  for (const auto& cmd : place_commands_) {
-    send_command(cmd);
-    std::this_thread::sleep_for(std::chrono::milliseconds(command_delay_ms_));
-  }
-
-  RCLCPP_INFO(this->get_logger(), "Pick and place cycle complete");
 }
 
 void ManipulatorNode::send_command(const std::string& command) {
@@ -128,10 +118,81 @@ void ManipulatorNode::send_command(const std::string& command) {
     } else {
       RCLCPP_ERROR(this->get_logger(), "Failed to send command: %s",
                    command.c_str());
+      return;
     }
   } else {
     RCLCPP_INFO(this->get_logger(), "[SIM] Command: %s", command.c_str());
   }
+
+  if (command_delay_ms_ > 0) {
+    std::this_thread::sleep_for(
+        std::chrono::milliseconds(command_delay_ms_));
+  }
+}
+
+void ManipulatorNode::execute_commands(
+    const std::vector<std::string>& commands) {
+  for (const auto& cmd : commands) {
+    send_command(cmd);
+  }
+}
+
+bool ManipulatorNode::wait_for_place2_aruco() {
+  RCLCPP_INFO(this->get_logger(),
+              "At pre-pick pose — waiting for Aruco marker to run place_commands_2");
+
+  {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    waiting_for_place2_aruco_ = true;
+    place2_aruco_seen_ = false;
+  }
+
+  {
+    std::unique_lock<std::mutex> lock(state_mutex_);
+    work_cv_.wait(lock, [this] {
+      return place2_aruco_seen_ || shutdown_requested_;
+    });
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    waiting_for_place2_aruco_ = false;
+  }
+
+  return place2_aruco_seen_;
+}
+
+void ManipulatorNode::pick_n_place(int aruco_id) {
+  RCLCPP_INFO(this->get_logger(),
+              "Starting pick and place for Aruco marker: %d", aruco_id);
+
+  if (pick_commands_.empty()) {
+    RCLCPP_ERROR(this->get_logger(), "pick_commands is empty — aborting cycle");
+    return;
+  }
+
+  RCLCPP_INFO(this->get_logger(), "Executing pick commands");
+  execute_commands(pick_commands_);
+
+  RCLCPP_INFO(this->get_logger(), "Executing place_commands_1");
+  execute_commands(place_commands_1_);
+
+  RCLCPP_INFO(this->get_logger(), "Returning to pre-pick pose");
+  send_command(pick_commands_.front());
+
+  if (!wait_for_place2_aruco()) {
+    RCLCPP_INFO(this->get_logger(),
+                "Cycle aborted while waiting for second Aruco marker");
+    return;
+  }
+
+  RCLCPP_INFO(this->get_logger(), "Executing pick commands");
+  execute_commands(pick_commands_);
+
+  RCLCPP_INFO(this->get_logger(), "Executing place_commands_2");
+  execute_commands(place_commands_2_);
+
+  RCLCPP_INFO(this->get_logger(), "Pick and place cycle complete");
 }
 
 void ManipulatorNode::worker_thread() {
@@ -158,7 +219,6 @@ void ManipulatorNode::worker_thread() {
       RCLCPP_ERROR(this->get_logger(), "Pick and place failed: %s", e.what());
     }
 
-    // Always release busy flag so the next ArUco ID can be accepted
     {
       std::lock_guard<std::mutex> lock(state_mutex_);
       is_busy_ = false;
