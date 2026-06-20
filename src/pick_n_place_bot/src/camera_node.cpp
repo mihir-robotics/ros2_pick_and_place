@@ -157,7 +157,13 @@ void CameraNode::timer_callback()
 int main(int argc, char * argv[])
 {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<CameraNode>());
+  try {
+    rclcpp::spin(std::make_shared<CameraNode>());
+  } catch (const std::exception & e) {
+    RCLCPP_ERROR(rclcpp::get_logger("camera_node"), "Fatal error: %s", e.what());
+    rclcpp::shutdown();
+    return 1;
+  }
   rclcpp::shutdown();
   return 0;
 }

@@ -171,10 +171,10 @@ bool parseJointCommand(const String &cmd, int &idx, int &angle, unsigned long &d
 }
 
 void handlePoseCommand(const String &cmd) {
-  // Format: pose-<6 comma-separated angles>;<duration_ms>
+  // Format: pose-<5 comma-separated angles>;<duration_ms>
   int lastSemi = cmd.lastIndexOf(';');
   if (lastSemi == -1) {
-    Serial.println("ERR: pose command needs duration, e.g. pose-40,90,160,50,0,180;2000");
+    Serial.println("ERR: pose command needs duration, e.g. pose-40,50,0,0,180;2000");
     signalDone();
     return;
   }
@@ -199,7 +199,7 @@ void handlePoseCommand(const String &cmd) {
     token.trim();
     targets[i] = clamp(token.toInt());
     if (comma == -1 && i < NUM_JOINTS - 1) {
-      Serial.println("ERR: pose requires 6 comma-separated angles");
+      Serial.println("ERR: pose requires 5 comma-separated angles");
       signalDone();
       return;
     }

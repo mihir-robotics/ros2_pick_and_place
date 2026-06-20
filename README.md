@@ -62,34 +62,37 @@ All nodes load `config/params.yaml`.
 
 ```yaml
 camera_node:
-  camera_device: "/dev/video0"   # V4L2 device path; falls back to camera_device_id if empty
-  camera_device_id: 0
-  frame_width: 640
-  frame_height: 480
-  frame_rate: 30
+  ros__parameters:
+    camera_device: "/dev/video0"   # V4L2 device path; falls back to camera_device_id if empty
+    camera_device_id: 0
+    frame_width: 640
+    frame_height: 480
+    frame_rate: 30
 
 detector_node:
-  aruco_dictionary_id: 0         # 0 = DICT_4X4_50
-  marker_size: 0.05
-  min_marker_perimeter_rate: 0.80
+  ros__parameters:
+    aruco_dictionary_id: 0         # 0 = DICT_4X4_50
+    marker_size: 0.05
+    min_marker_perimeter_rate: 0.80
 
 manipulator_node:
-  serial_port: "/dev/ttyUSB0"
-  command_delay_ms: 750        # Pause after each command so the arm settles
-  pick_commands:
-    - "pose-40,50,0,0,180;300" # Pre-pick pose (also used on startup and between stages)
-    - "wrist-45-500"
-    - "gripper-100"
-  place_commands_1:
-    - "pose-135,55,0,55,100;300"
-    - "gripper-180"
-    - "wrist-0-500"
-    - "home-500"
-  place_commands_2:
-    - "pose-110,45,10,60,100;300"
-    - "gripper-180"
-    - "wrist-0-500"
-    - "home-500"
+  ros__parameters:
+    serial_port: "/dev/ttyUSB0"
+    command_delay_ms: 750        # Pause after each command so the arm settles
+    pick_commands:
+      - "pose-40,50,0,0,180;300" # Pre-pick pose (also used on startup and between stages)
+      - "wrist-45-500"
+      - "gripper-100"
+    place_commands_1:
+      - "pose-135,55,0,55,100;300"
+      - "gripper-180"
+      - "wrist-0-500"
+      - "home-500"
+    place_commands_2:
+      - "pose-110,45,10,60,100;300"
+      - "gripper-180"
+      - "wrist-0-500"
+      - "home-500"
 ```
 
 ## Serial protocol
@@ -118,13 +121,12 @@ This project is developed on WSL2 with a USB camera passed through via `usbipd-w
 
 - ROS 2 Jazzy
 - OpenCV 4.x with ArUco (`libopencv-dev`)
-- `cv_bridge`, `image_transport`
+- `cv_bridge`
 
 ```bash
 sudo apt-get install -y \
   libopencv-dev \
-  ros-jazzy-cv-bridge \
-  ros-jazzy-image-transport
+  ros-jazzy-cv-bridge
 ```
 
 ## Build
