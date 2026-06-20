@@ -14,11 +14,30 @@
 
 #include "pick_n_place_bot/detector_node.hpp"
 
-#include <sstream>
-
 #include <opencv2/aruco.hpp>
 
 #include "cv_bridge/cv_bridge.hpp"
+
+namespace
+{
+
+cv::aruco::PREDEFINED_DICTIONARY_NAME dictionary_id_to_type(int id)
+{
+  switch (id) {
+    case 0:
+      return cv::aruco::DICT_4X4_50;
+    case 1:
+      return cv::aruco::DICT_5X5_100;
+    case 2:
+      return cv::aruco::DICT_6X6_250;
+    case 3:
+      return cv::aruco::DICT_7X7_1000;
+    default:
+      return cv::aruco::DICT_4X4_50;
+  }
+}
+
+}  // namespace
 
 DetectorNode::DetectorNode()
 : Node("detector_node"), detected_marker_id_(-1), marker_detected_(false)
@@ -34,9 +53,16 @@ DetectorNode::DetectorNode()
   min_marker_perimeter_rate_ =
     this->get_parameter("min_marker_perimeter_rate").as_double();
 
-  // Initialize ArUco detector (OpenCV 4.5.x compatible API)
-  dictionary_ = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_4X4_50);
+  const auto dict_type = dictionary_id_to_type(aruco_dictionary_id_);
+  if (aruco_dictionary_id_ < 0 || aruco_dictionary_id_ > 3) {
+    RCLCPP_WARN(this->get_logger(),
+      "Unknown aruco_dictionary_id %d, using DICT_4X4_50",
+      aruco_dictionary_id_);
+  }
+
+  dictionary_ = cv::aruco::getPredefinedDictionary(dict_type);
   detector_params_ = cv::makePtr<cv::aruco::DetectorParameters>();
+  detector_params_->minMarkerPerimeterRate = min_marker_perimeter_rate_;
 
   // Subscribe to camera/image — must match camera_node publisher topic name
   image_sub_ = this->create_subscription<sensor_msgs::msg::Image>(

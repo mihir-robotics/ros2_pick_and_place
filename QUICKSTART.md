@@ -16,7 +16,6 @@ sudo apt-get install -y \
   cmake \
   libopencv-dev \
   ros-jazzy-cv-bridge \
-  ros-jazzy-image-transport \
   ros-jazzy-launch-ros
 ```
 
@@ -41,7 +40,7 @@ python3 -c "import cv2; cap=cv2.VideoCapture('/dev/video0', cv2.CAP_V4L2); print
 
 On WSL2, follow [Setting Up USB Camera In WSL2](Setting%20Up%20USB%20Camera%20In%20WSL2.md) to attach the camera and enable the UVC driver.
 
-Set `camera_device` in `src/pick_n_place_bot/config/params.yaml` to match your device (default: `/dev/video0`).
+Set `camera_device` under the `camera_node:` section in `src/pick_n_place_bot/config/params.yaml` to match your device (default: `/dev/video0`).
 
 ## 4. Arduino
 
@@ -53,7 +52,7 @@ Set `camera_device` in `src/pick_n_place_bot/config/params.yaml` to match your d
 ls -l /dev/ttyUSB* /dev/ttyACM*
 ```
 
-4. Set `manipulator_node.serial_port` in `config/params.yaml` if the port differs from `/dev/ttyUSB0`.
+4. Set `serial_port` under the `manipulator_node:` section in `config/params.yaml` if the port differs from `/dev/ttyUSB0`.
 
 ## 5. Configure pick and place
 
