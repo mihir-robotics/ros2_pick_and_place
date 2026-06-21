@@ -58,7 +58,14 @@ ls -l /dev/ttyUSB* /dev/ttyACM*
 
 ## 5. Configure pick and place
 
-Edit `src/pick_n_place_bot/config/params.yaml`. The command lists define the arm motion; each entry is a serial command understood by the Arduino sketch (e.g. `home`, `gripper-100`, `base_y-110;shoulder-180`).
+Edit `src/pick_n_place_bot/config/params.yaml`:
+
+- **`pick_commands`** — first entry is the pre-pick / idle pose (wrist up); remaining entries are optional fixed steps (e.g. gripper preset).
+- **`pick_point_*`** — where the arm grasps when a marker is seen (IK target in meters).
+- **`place_line_origin_*` / `place_line_step_*`** — row of up to `max_line_slots` placements; keep `place_line_step_z: 0.0` for a flat row on the board.
+- **`serial_port`**, **`command_delay_ms`**, and IK link params — match your arm geometry and settling time.
+
+Tune placement on hardware with a top-down view: set the origin to the first object center and adjust step X/Y along the row. See [README.md](README.md) for the full parameter list and simulation-mode testing.
 
 ## 6. Run
 
@@ -82,6 +89,9 @@ ros2 topic echo /detector/aruco_id
 
 # Terminal 4 — manipulator (simulation mode if serial is unavailable)
 ros2 run pick_n_place_bot manipulator_node
+
+# Optional: trigger one cycle without the camera (use a new ID per object)
+ros2 topic pub --once /detector/aruco_id std_msgs/msg/Int32 "{data: 1}"
 ```
 
 View the camera feed:

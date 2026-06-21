@@ -1,6 +1,6 @@
 # ROS2 Pick & Place Robot Arm using Computer Vision [![CI](https://github.com/mihir-robotics/ros2_pick_and_place/actions/workflows/ci.yml/badge.svg)](https://github.com/mihir-robotics/ros2_pick_and_place/actions/workflows/ci.yml)
 
-ROS 2 package that runs pick-and-place on an Arduino robot arm. A USB camera feeds frames to an ArUco detector; when a marker is seen, the manipulator node runs a two-stage pick-and-place cycle over serial at 9600 baud. The Arduino firmware supports smooth trajectory motion via `pose-*` and duration-based joint commands.
+ROS 2 package that runs pick-and-place on an Arduino robot arm. A USB camera feeds frames to an ArUco detector; each **new** ArUco ID triggers one pick-and-place cycle on the manipulator node. Pick and place targets use **analytical inverse kinematics** (built into `manipulator_node`); fixed joint lists still define the idle pre-pick pose and gripper commands. Motion is sent over serial at 9600 baud. The Arduino firmware supports smooth trajectory motion via `pose-*` and duration-based joint commands.
 
 
 ![arm 2x gif](assets/arm.gif)
@@ -15,14 +15,17 @@ ROS 2 package that runs pick-and-place on an Arduino robot arm. A USB camera fee
 
 1. **camera_node** — captures frames from a V4L2 USB camera and publishes `sensor_msgs/Image` on `/camera/image`.
 2. **detector_node** — detects ArUco markers in the camera stream and publishes the marker ID as `std_msgs/Int32` on `/detector/aruco_id`.
-3. **manipulator_node** — on startup, moves to the pre-pick pose (first entry in `pick_commands`). When an ArUco marker is detected, a worker thread runs a two-stage cycle:
-   - **Stage 1:** `pick_commands` → `place_commands_1` → return to pre-pick pose
-   - **Wait:** blocks until the next ArUco sighting
-   - **Stage 2:** `pick_commands` → `place_commands_2`
-   
-   Concurrent detections are rejected while a cycle is in progress (`is_busy_`). During the wait-for-place2 phase, a new marker sighting unblocks stage 2. The marker ID is logged but does not change which command lists run.
+3. **manipulator_node** — on startup, moves to the pre-pick pose (first entry in `pick_commands`, wrist tilted up). When a **new** ArUco ID arrives on `/detector/aruco_id`, a worker thread runs one cycle:
+   - Pre-pick pose (wrist up)
+   - IK move to `pick_point_*` with a level gripper → close gripper
+   - IK transit at raised height (`transit_z_for_place`, up to `place_clearance_m` above the slot)
+   - IK place on the board → open gripper
+   - Slow wrist tilt up, retract at transit height (wrist up), slow return to pre-pick
 
-If the serial port cannot be opened, the manipulator node logs commands in simulation mode instead of sending them.
+   **Placement:** objects are laid out on a **straight row** in the board plane. Slot `N` is  
+   `place_line_origin + N × place_line_step` with **constant** `place_z = place_line_origin_z` (`place_line_step_z` should stay `0.0`). Up to `max_line_slots` unique IDs are handled; duplicate IDs and extra detections while busy are ignored.
+
+If the serial port cannot be opened, the manipulator node logs `[SIM] Command: …` instead of sending serial data.
 
 ### Rqt Graph
 ![rqt](assets/rqt-graph.png)
@@ -36,6 +39,7 @@ pick_n_place_bot/
 │   ├── detector_node.cpp
 │   └── manipulator_node.cpp
 ├── include/pick_n_place_bot/
+│   ├── arm_kinematics.hpp        # Analytical IK (used by manipulator_node)
 │   ├── camera_node.hpp
 │   ├── detector_node.hpp
 │   └── manipulator_node.hpp
@@ -79,27 +83,35 @@ detector_node:
   ros__parameters:
     aruco_dictionary_id: 0         # 0 = DICT_4X4_50
     marker_size: 0.05
-    min_marker_perimeter_rate: 0.80
+    min_marker_perimeter_rate: 0.05
 
 manipulator_node:
   ros__parameters:
     serial_port: "/dev/ttyUSB0"
-    command_delay_ms: 750        # Pause after each command so the arm settles
+    command_delay_ms: 750
     pick_commands:
-      - "pose-40,50,0,0,180;300" # Pre-pick pose (also used on startup and between stages)
-      - "wrist-45-500"
+      - "pose-40,50,0,0,180;300"   # Pre-pick / idle (wrist up); first entry only for wait/return
       - "gripper-100"
-    place_commands_1:
-      - "pose-135,55,0,55,100;300"
-      - "gripper-180"
-      - "wrist-0-500"
-      - "home-500"
-    place_commands_2:
-      - "pose-110,45,10,60,100;300"
-      - "gripper-180"
-      - "wrist-0-500"
-      - "home-500"
+    link_base_m: 0.06
+    link_shoulder_m: 0.065
+    link_wrist_m: 0.065
+    ee_angle_offset_rad: 0.09
+    prefer_elbow_up: true
+    pick_point_x: 0.058863          # IK grasp point (meters, arm base frame)
+    pick_point_y: -0.070150
+    pick_point_z: 0.068012
+    place_line_origin_x: 0.064013   # First slot on the board row
+    place_line_origin_y: 0.064013
+    place_line_origin_z: 0.075962
+    place_line_step_x: 0.031850     # Along-row spacing (X/Y only; keep step_z: 0.0)
+    place_line_step_y: -0.032803
+    place_line_step_z: 0.0
+    place_clearance_m: 0.06
+    max_line_slots: 3
+    gripper_open_width_m: 0.085     # Startup warning if step spacing is tighter than this
 ```
+
+See `src/pick_n_place_bot/config/params.yaml` for gripper commands, pose durations, and post-place timing fields.
 
 ## Serial protocol
 
@@ -117,7 +129,7 @@ Commands are newline-terminated strings sent at 9600 baud. The Arduino sketch in
 
 The Arduino prints `DONE` when each command or trajectory finishes. The ROS manipulator node uses a fixed `command_delay_ms` sleep after each command and does not wait for `DONE` — tune the delay to match your trajectory durations.
 
-Pick and place sequences are defined in `params.yaml` via `pick_commands`, `place_commands_1`, and `place_commands_2`.
+The pre-pick idle pose and gripper open/close strings live in `pick_commands` and the `gripper_*` parameters. Pick and place **positions** are set with `pick_point_*` and `place_line_*` (tune on hardware using FK/IK logs or a top-down view of the board).
 
 ## USB camera on WSL2
 
@@ -163,6 +175,31 @@ ros2 run pick_n_place_bot detector_node
 ros2 run pick_n_place_bot manipulator_node
 ```
 
+## Inverse kinematics
+
+Analytical IK lives in `include/pick_n_place_bot/arm_kinematics.hpp` and is called from `manipulator_node` during pick, transit, and place moves. Targets are in meters in the arm base frame (`Z` up). For pick/place, the solver sets a **level gripper**; pre-pick and retract use the wrist angle from `pick_commands` / `pre_pick_wrist_angle`.
+
+Tune link lengths (`link_*_m`), `ee_angle_offset_rad`, and `prefer_elbow_up` under `manipulator_node` in `params.yaml` if solutions fail joint limits or the elbow folds the wrong way. If you see `IK failed` or `No reachable transit height`, reduce `place_line_step_*`, lower `place_clearance_m`, or adjust origins — outer slots are reach-limited.
+
+## Simulation mode
+
+Useful for verifying cycles without hardware:
+
+```bash
+source install/setup.bash
+ros2 run pick_n_place_bot manipulator_node --ros-args \
+  -p serial_port:=/dev/no_such_port \
+  -p command_delay_ms:=10
+```
+
+Trigger cycles by publishing unique ArUco IDs (best-effort QoS, same as the detector):
+
+```bash
+ros2 topic pub --once /detector/aruco_id std_msgs/msg/Int32 "{data: 42}"
+```
+
+On WSL2, a single `ros2 topic pub --once` can drop messages; wait for `Pick and place complete` before publishing the next ID, or use a small `rclpy` publisher with `qos_profile_sensor_data`. Expect startup warning when line step spacing is below `gripper_open_width_m` (reach vs. collision tradeoff).
+
 ## Troubleshooting
 
 **Camera not opening**
@@ -188,5 +225,9 @@ ls -l /dev/ttyUSB* /dev/ttyACM*
 ```
 
 Upload `arduino/arduino.ino`, match the port in `params.yaml`, and ensure your user is in the `dialout` group.
+
+**Pick/place aborts with IK warnings**
+
+Check logs for `IK failed` or `No reachable transit height`. Confirm `pick_point_*` and `place_line_*` use full-precision values (rounded coordinates can hit shoulder &lt; 0°). Reduce step size or slot count if the outer line slot is at max reach.
 
 ---
