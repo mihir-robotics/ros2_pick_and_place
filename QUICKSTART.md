@@ -40,7 +40,9 @@ python3 -c "import cv2; cap=cv2.VideoCapture('/dev/video0', cv2.CAP_V4L2); print
 
 On WSL2, follow [Setting Up USB Camera In WSL2](Setting%20Up%20USB%20Camera%20In%20WSL2.md) to attach the camera and enable the UVC driver.
 
-Set `camera_device` under the `camera_node:` section in `src/pick_n_place_bot/config/params.yaml` to match your device (default: `/dev/video0`).
+On **Arduino UNO Q**, use [Setting Up On Arduino UNO Q](Setting%20Up%20On%20Arduino%20UNO%20Q.md) (see that guide).
+
+Set `camera_device` under the `camera_node:` section in `src/pick_n_place_bot/config/params.yaml` to match your device (default: `/dev/video0` on WSL/PC).
 
 ## 4. Arduino
 

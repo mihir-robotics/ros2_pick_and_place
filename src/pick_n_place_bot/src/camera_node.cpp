@@ -24,8 +24,8 @@ CameraNode::CameraNode()
 {
   this->declare_parameter<std::string>("camera_device", "/dev/video0");
   this->declare_parameter<int>("camera_device_id", 0);
-  this->declare_parameter<int>("frame_width", 640);
-  this->declare_parameter<int>("frame_height", 480);
+  this->declare_parameter<int>("frame_width", 1280);
+  this->declare_parameter<int>("frame_height", 720);
   this->declare_parameter<int>("frame_rate", 30);
 
   camera_device_ = this->get_parameter("camera_device").as_string();

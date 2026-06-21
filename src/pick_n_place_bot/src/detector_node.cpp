@@ -45,7 +45,7 @@ DetectorNode::DetectorNode()
   // Declare parameters
   this->declare_parameter<int>("aruco_dictionary_id", 0);
   this->declare_parameter<double>("marker_size", 0.05);
-  this->declare_parameter<double>("min_marker_perimeter_rate", 0.80);
+  this->declare_parameter<double>("min_marker_perimeter_rate", 0.05);
 
   // Get parameters
   aruco_dictionary_id_ = this->get_parameter("aruco_dictionary_id").as_int();

@@ -42,7 +42,8 @@ pick_n_place_bot/
 ├── arduino/
 │   └── arduino.ino              # Servo firmware (9600 baud)
 ├── config/
-│   └── params.yaml
+│   ├── params.yaml
+│   └── params.uno_q.yaml      # Arduino UNO Q device paths
 ├── launch/
 │   └── robot_arm.launch.py
 ├── CMakeLists.txt
@@ -58,7 +59,12 @@ pick_n_place_bot/
 
 ## Parameters
 
-All nodes load `config/params.yaml`.
+All nodes load parameters from a YAML file. Default: `config/params.yaml`:
+
+```bash
+ros2 launch pick_n_place_bot robot_arm.launch.py \
+  params_file:=$(ros2 pkg prefix pick_n_place_bot)/share/pick_n_place_bot/config/params.uno_q.yaml
+```
 
 ```yaml
 camera_node:
@@ -117,6 +123,10 @@ Pick and place sequences are defined in `params.yaml` via `pick_commands`, `plac
 
 This project is developed on WSL2 with a USB camera passed through via `usbipd-win`. See [Setting Up USB Camera In WSL2](Setting%20Up%20USB%20Camera%20In%20WSL2.md) for kernel, driver, and attach steps.
 
+## Arduino UNO Q
+
+Run on the board’s Debian Linux (native or Docker). Device paths differ from WSL (`/dev/video2`, CH340 serial). See [Setting Up On Arduino UNO Q](Setting%20Up%20On%20Arduino%20UNO%20Q.md).
+
 ## Dependencies
 
 - ROS 2 Jazzy
@@ -142,6 +152,8 @@ source install/setup.bash
 ```bash
 ros2 launch pick_n_place_bot robot_arm.launch.py
 ```
+
+On Arduino UNO Q, pass `params.uno_q.yaml` (see [Setting Up On Arduino UNO Q](Setting%20Up%20On%20Arduino%20UNO%20Q.md)).
 
 Individual nodes:
 
