@@ -17,21 +17,37 @@ manipulator_node:
     serial_port: "/dev/ttyUSB0"  # Serial port for Arduino connection
     command_delay_ms: 750        # Pause after each command so the arm settles
 
-    # Pick command sequence
+    # Pre-pick wait pose (wrist tilted up at 0°); first entry used for idle/return
     pick_commands:
-      - "pose-40,50,0,0,180;300" # Pre-pick pose
-      - "wrist-45-500"
+      - "pose-40,50,0,0,180;300"
       - "gripper-100"
 
-    # Place command sequence
-    place_commands_1:
-      - "pose-135,55,0,55,100;300"   # Synchronized move to place location
-      - "gripper-180"
-      - "wrist-0-500"
-      - "home-500"
+    link_base_m: 0.06
+    link_shoulder_m: 0.065
+    link_wrist_m: 0.065
+    ee_angle_offset_rad: 0.09
+    prefer_elbow_up: true
+    pose_duration_ms: 300
+    pick_gripper_open: 180
+    place_gripper_closed: 100
+    gripper_close_cmd: "gripper-100"
+    gripper_open_cmd: "gripper-180"
 
-    place_commands_2:
-      - "pose-110,45,10,60,100;300"   # Synchronized move to place location
-      - "gripper-180"
-      - "wrist-0-500"
-      - "home-500"
+    pick_point_x: 0.058863
+    pick_point_y: -0.070150
+    pick_point_z: 0.068012
+
+    gripper_open_width_m: 0.085
+    # Top-down row on the board: tune origin to first bottle center; step along the row in X/Y only
+    place_line_origin_x: 0.064013
+    place_line_origin_y: 0.064013
+    place_line_origin_z: 0.075962
+    place_line_step_x: 0.031850
+    place_line_step_y: -0.032803
+    place_line_step_z: 0.0
+    place_clearance_m: 0.06
+    max_line_slots: 3
+    pre_pick_wrist_angle: 0
+    post_place_wrist_tilt_ms: 400
+    post_place_retract_duration_ms: 400
+    pre_pick_return_duration_ms: 400
